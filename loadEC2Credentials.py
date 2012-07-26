@@ -33,6 +33,8 @@ if dialog.ShowModal() == wx.ID_OK:
         stringBuffer = StringIO.StringIO(ec2rcContents)
 
         line = "\n"
+        ec2_access_key = ""
+        ec2_secret_key = ""
         while line!="":
             line = stringBuffer.readline()
             if "export EC2_ACCESS_KEY" in line:
@@ -43,6 +45,42 @@ if dialog.ShowModal() == wx.ID_OK:
                 lineSplit = line.split("=")
                 ec2_secret_key = lineSplit[1].strip()
                 print "EC2_SECRET_KEY = " + ec2_secret_key
+
+        import boto
+        from boto.ec2.connection import EC2Connection
+        from boto.ec2.regioninfo import *
+
+        region = RegionInfo(name="NeCTAR", endpoint="nova.rc.nectar.org.au")
+        connection = boto.connect_ec2(aws_access_key_id=ec2_access_key,
+            aws_secret_access_key=ec2_secret_key,
+            is_secure=False,
+            region=region,
+            port=8773,
+            path="/services/Cloud")
+
+        reservations = connection.get_all_instances()
+        print reservations
+
+        keypairs = connection.get_all_key_pairs()
+        print keypairs
+        print keypairs[0].name
+
+        security_groups = connection.get_all_security_groups()
+        print security_groups
+
+        images = connection.get_all_images()
+        #.print images
+        #print images[0].name
+
+        from pprint import pprint
+        #pprint(images[0].__dict__)
+
+        centosImage = None
+        for image in images:
+            # ami-0000000d Centos 6.2 amd64
+            if image.id=="ami-0000000d":
+                centosImage = image
+                print "Found CentOS image: " + centosImage.id + ", " + centosImage.name
 
 else:
 

@@ -489,112 +489,8 @@ class MyFrame(wx.Frame):
                     
                     wx.CallAfter(sys.stdout.write, "\n")
 
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Checking quota...")
-
-                    stdin,stdout,stderr = sshClient.exec_command("mybalance --hours")
-                    wx.CallAfter(sys.stdout.write, stderr.read())
-                    wx.CallAfter(sys.stdout.write, stdout.read())
-
-                    wx.CallAfter(sys.stdout.write, "\n")
-
-                    stdin,stdout,stderr = sshClient.exec_command("echo `showq -w class:vis | grep \"processors in use by local jobs\" | awk '{print $1}'` of 10 nodes in use")
-                    wx.CallAfter(sys.stdout.write, stderr.read())
-                    wx.CallAfter(sys.stdout.write, stdout.read())
-
-                    wx.CallAfter(sys.stdout.write, "\n")
-
+                    visnode = "<visnode"
                     wx.CallAfter(loginDialogStatusBar.SetStatusText, "Requesting remote desktop...")
-
-                    #qsubcmd = "/usr/local/desktop/request_visnode.sh " + project + " " + hours
-                    qsubcmd = "/usr/local/desktop/request_visnode.sh "
-
-                    wx.CallAfter(sys.stdout.write, qsubcmd + "\n")
-                    wx.CallAfter(sys.stdout.write, "\n")
-                  
-                    # An ssh channel can be used to execute a command, 
-                    # and you can use it in a select statement to find out when data can be read.
-                    # The channel object can be read from and written to, connecting with 
-                    # stdout and stdin of the remote command. You can get at stderr by calling 
-                    # channel.makefile_stderr(...).
-
-                    transport = sshClient.get_transport()
-                    channel = transport.open_session()
-                    channel.get_pty()
-                    channel.setblocking(0)
-                    channel.invoke_shell()
-                    out = ""
-                    channel.send(qsubcmd + "\n")
-
-                    # From: http://www.lag.net/paramiko/docs/paramiko.Channel-class.html#recv_stderr_ready
-                    # "Only channels using exec_command or invoke_shell without a pty 
-                    #  will ever have data on the stderr stream."
-
-                    lineNumber = 0
-                    startingXServerLineNumber = -1
-                    breakOutOfMainLoop = False
-                    lineFragment = ""
-                    checkedShowStart = False
-                    jobNumber = "0.m2-m"
-
-                    while True:
-                        tCheck = 0
-                        while not channel.recv_ready() and not channel.recv_stderr_ready():
-                            #Use asterisks to simulate progress bar:
-                            #wx.CallAfter(sys.stdout.write, "*")
-                            time.sleep(1)
-                            tCheck+=1
-                            if tCheck >= 10:
-                                # wx.CallAfter(sys.stdout.write, "Read time out?\n") # Throw exception here?
-                                # return False
-                                if (not checkedShowStart) and jobNumber!="0.m2-m":
-                                    checkedShowStart = True
-                                    def showStart():
-                                        sshClient2 = ssh.SSHClient()
-                                        sshClient2.set_missing_host_key_policy(ssh.AutoAddPolicy())
-                                        sshClient2.connect(cvlAdministratorLoginHost,username=username,password=password)
-                                        stdin,stdout,stderr = sshClient2.exec_command("showstart " + jobNumber)
-                                        stderrRead = stderr.read()
-                                        stdoutRead = stdout.read()
-                                        if not "00:00:00" in stdoutRead:
-                                            wx.CallAfter(sys.stdout.write, "showstart " + jobNumber + "...\n")
-                                            wx.CallAfter(sys.stdout.write, stderrRead)
-                                            wx.CallAfter(sys.stdout.write, stdoutRead)
-                                        sshClient2.close()
-
-                                    showStartThread = threading.Thread(target=showStart)
-                                    showStartThread.start()
-                                break
-                        if (channel.recv_stderr_ready()):
-                            out = channel.recv_stderr(1024)
-                            buff = StringIO.StringIO(out)
-                            line = lineFragment + buff.readline()
-                            while line != "":
-                                wx.CallAfter(sys.stdout.write, "ERROR: " + line + "\n")
-                        if (channel.recv_ready()):
-                            out = channel.recv(1024)
-                            buff = StringIO.StringIO(out)
-                            line = lineFragment + buff.readline()
-                            while line != "":
-                                lineNumber += 1
-                                if not line.endswith("\n") and not line.endswith("\r"):
-                                    lineFragment = line
-                                    break
-                                else:
-                                    lineFragment = ""
-                                if "waiting for job" in line:
-                                    wx.CallAfter(sys.stdout.write, line)
-                                    lineSplit = line.split(" ")
-                                    jobNumber = lineSplit[4] # e.g. 3050965.m2-m
-                                    jobNumberSplit = jobNumber.split(".")
-                                    jobNumber = jobNumberSplit[0]
-                                if "Starting XServer on the following nodes" in line:
-                                    startingXServerLineNumber = lineNumber
-                                if lineNumber == (startingXServerLineNumber + 1): # vis node
-                                    visnode = line.strip()
-                                    breakOutOfMainLoop = True
-                                line = buff.readline()
-                        if breakOutOfMainLoop:
-                            break
 
                     wx.CallAfter(loginDialogStatusBar.SetStatusText, "Acquired desktop node:" + visnode)
 
@@ -604,10 +500,10 @@ class MyFrame(wx.Frame):
 
                     wx.CallAfter(loginDialogStatusBar.SetStatusText, "Generating SSH key-pair for tunnel...")
 
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/MassiveLauncherKeyPair*")
+                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair*")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/usr/bin/ssh-keygen -C \"CVL Administrator\" -N \"\" -t rsa -f ~/MassiveLauncherKeyPair")
+                    stdin,stdout,stderr = sshClient.exec_command("/usr/bin/ssh-keygen -C \"CVL Administrator\" -N \"\" -t rsa -f ~/CvlAdministratorKeyPair")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
                     stdin,stdout,stderr = sshClient.exec_command("/bin/touch ~/.ssh/authorized_keys")
@@ -616,19 +512,19 @@ class MyFrame(wx.Frame):
                     stdin,stdout,stderr = sshClient.exec_command("/bin/sed -i -e \"/CVL Administrator/d\" ~/.ssh/authorized_keys")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat MassiveLauncherKeyPair.pub >> ~/.ssh/authorized_keys")
+                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat CvlAdministratorKeyPair.pub >> ~/.ssh/authorized_keys")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/MassiveLauncherKeyPair.pub")
+                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair.pub")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat MassiveLauncherKeyPair")
+                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat CvlAdministratorKeyPair")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
 
                     privateKeyString = stdout.read()
 
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/MassiveLauncherKeyPair")
+                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair")
                     if len(stderr.read()) > 0:
                         wx.CallAfter(sys.stdout.write, stderr.read())
 
@@ -940,6 +836,31 @@ class MyApp(wx.App):
 
         global loginDialogFrame
         loginDialogFrame = MyFrame(None, -1, 'CVL Administrator')
+
+        global ec2CredentialsDialog
+        ec2CredentialsDialog = wx.Dialog(loginDialogFrame, title="CVL Administrator", name="CVL Administrator",size=(680,290))
+        ec2CredentialsDialog.Center()
+        ec2CredentialsPanel = wx.Panel(ec2CredentialsDialog)
+        gs = wx.FlexGridSizer(rows=4, cols=3, vgap=5, hgap=5)
+        ec2CredentialsPanel.SetSizer(gs)
+
+        ec2CredentialsPanelTitleLabel = wx.StaticText(ec2CredentialsPanel, label = "CVL Administrator")
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        font.SetPointSize(14)
+        font.SetWeight(wx.BOLD)
+        ec2CredentialsPanelTitleLabel.SetFont(font)
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel))
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsPanelTitleLabel, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel))
+
+        ec2CredentialsZipFileLabel = wx.StaticText(ec2CredentialsPanel, label = "EC2 credentials zip file:")
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel))
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsZipFileLabel, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel))
+
+        gs.Fit(ec2CredentialsPanel)
+
+        ec2CredentialsDialog.ShowModal()
+        ec2CredentialsDialog.Destroy()
+
         loginDialogFrame.Show(True)
         return True
 
