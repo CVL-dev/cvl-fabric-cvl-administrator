@@ -68,6 +68,9 @@ global privateKeyFile
 global loginDialogFrame
 loginDialogFrame = None
 
+global ec2CredentialsZipFilePath
+ec2CredentialsZipFilePath = ""
+
 class MyHtmlParser(HTMLParser.HTMLParser):
   def __init__(self):
     HTMLParser.HTMLParser.__init__(self)
@@ -247,7 +250,6 @@ class MyFrame(wx.Frame):
                 config.write(cvlAdministratorPreferencesFileObject)
         global cvlAdministratorUsernameTextField
         cvlAdministratorUsernameTextField = wx.TextCtrl(loginDialogPanel, -1, username,  (125, 215), (widgetWidth1, -1))
-        cvlAdministratorUsernameTextField = cvlAdministratorUsernameTextField
         if username.strip()!="":
             cvlAdministratorUsernameTextField.SelectAll()
 
@@ -276,125 +278,6 @@ class MyFrame(wx.Frame):
         self.SetStatusBar(self.statusbar)
         self.Centre()
 
-        #cvlAdministratorURL = "https://www.cvlAdministrator.org.au/index.php?option=com_content&view=article&id=121"
-
-        #try:
-            #myHtmlParser = MyHtmlParser()
-            #feed = urllib.urlopen(cvlAdministratorURL)
-            #html = feed.read()
-            #myHtmlParser.feed(html)
-            #myHtmlParser.close()
-        #except:
-            #dlg = wx.MessageDialog(self, "Error: Unable to contact MASSIVE website to check version number.\n\n" +
-                                        #"CVL Administrator cannot continue.\n",
-                                #"CVL Administrator", wx.OK | wx.ICON_INFORMATION)
-            #dlg.ShowModal()
-            #dlg.Destroy()
-            #sys.exit(1)
-
-
-        #latestVersion = myHtmlParser.data[0].strip()
-
-        dlg = wx.MessageDialog(self, "Warning: Bypassing version number check for now...\n", "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
-        dlg.ShowModal()
-        dlg.Destroy()
-        latestVersion = "0.0.1"
-
-        if latestVersion!=cvl_administrator_version_number.version_number:
-            newVersionAlertDialog = wx.Dialog(loginDialogFrame, title="CVL Administrator", name="CVL Administrator",pos=(200,150),size=(680,290))
-
-            if sys.platform.startswith("win"):
-                _icon = wx.Icon('CVL Administrator.ico', wx.BITMAP_TYPE_ICO)
-                newVersionAlertDialog.SetIcon(_icon)
-
-            if sys.platform.startswith("linux"):
-                import cvlAdministratorIcon
-                newVersionAlertDialog.SetIcon(cvlAdministratorIcon.getMASSIVElogoTransparent128x128Icon())
-
-            cvlAdministratorIconPanel = wx.Panel(newVersionAlertDialog)
-
-            import cvlAdministratorIcon
-            cvlAdministratorIconAsBitmap = cvlAdministratorIcon.getMASSIVElogoTransparent128x128Bitmap()
-            wx.StaticBitmap(cvlAdministratorIconPanel, -1, 
-                cvlAdministratorIconAsBitmap,
-                (0, 50),
-                (cvlAdministratorIconAsBitmap.GetWidth(), cvlAdministratorIconAsBitmap.GetHeight())) 
-
-            newVersionAlertTextPanel = wx.Panel(newVersionAlertDialog)
-
-            gs = wx.FlexGridSizer(rows=4, cols=1, vgap=5, hgap=5)
-            newVersionAlertTextPanel.SetSizer(gs)
-
-            newVersionAlertTitleLabel = wx.StaticText(newVersionAlertTextPanel,
-                label = "CVL Administrator")
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            font.SetPointSize(14)
-            font.SetWeight(wx.BOLD)
-            newVersionAlertTitleLabel.SetFont(font)
-            gs.Add(wx.StaticText(newVersionAlertTextPanel))
-            gs.Add(newVersionAlertTitleLabel, flag=wx.EXPAND)
-            gs.Add(wx.StaticText(newVersionAlertTextPanel))
-
-            newVersionAlertTextLabel1 = wx.StaticText(newVersionAlertTextPanel, 
-                label = 
-                "You are running version " + cvl_administrator_version_number.version_number + "\n\n" +
-                "The latest version is " + myHtmlParser.data[0] + "\n\n" +
-                "Please download a new version from:\n\n")
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            if sys.platform.startswith("darwin"):
-                font.SetPointSize(11)
-            else:
-                font.SetPointSize(9)
-            newVersionAlertTextLabel1.SetFont(font)
-            gs.Add(newVersionAlertTextLabel1, flag=wx.EXPAND)
-
-            newVersionAlertHyperlink = wx.HyperlinkCtrl(newVersionAlertTextPanel, 
-                id = wx.ID_ANY,
-                label = cvlAdministratorURL,
-                url = cvlAdministratorURL)
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            if sys.platform.startswith("darwin"):
-                font.SetPointSize(11)
-            else:
-                font.SetPointSize(8)
-            newVersionAlertHyperlink.SetFont(font)
-            gs.Add(newVersionAlertHyperlink, flag=wx.EXPAND)
-            gs.Add(wx.StaticText(newVersionAlertTextPanel))
-
-            newVersionAlertTextLabel2 = wx.StaticText(newVersionAlertTextPanel, 
-                label = 
-                "For queries, please contact:\n\nhelp@cvlAdministrator.org.au\njames.wettenhall@monash.edu\n")
-            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            if sys.platform.startswith("darwin"):
-                font.SetPointSize(11)
-            else:
-                font.SetPointSize(9)
-            newVersionAlertTextLabel2.SetFont(font)
-            gs.Add(newVersionAlertTextLabel2, flag=wx.EXPAND)
-
-            def OnOK(event):
-                sys.exit(1)
-
-            okButton = wx.Button(newVersionAlertTextPanel, 1, ' OK ')
-            okButton.SetDefault()
-            gs.Add(okButton, flag=wx.ALIGN_RIGHT)
-            gs.Add(wx.StaticText(newVersionAlertTextPanel))
-            gs.Fit(newVersionAlertTextPanel)
-
-            newVersionAlertDialog.Bind(wx.EVT_BUTTON, OnOK, id=1)
-
-            gs = wx.FlexGridSizer(rows=1, cols=3, vgap=5, hgap=5)
-            gs.Add(cvlAdministratorIconPanel, flag=wx.EXPAND)
-            gs.Add(newVersionAlertTextPanel, flag=wx.EXPAND)
-            gs.Add(wx.StaticText(newVersionAlertDialog,label="       "))
-            newVersionAlertDialog.SetSizer(gs)
-            gs.Fit(newVersionAlertDialog)
-
-            newVersionAlertDialog.ShowModal()
-            newVersionAlertDialog.Destroy()
-
-            sys.exit(1)
- 
     def OnAbout(self, event):
         dlg = wx.MessageDialog(self, "Version " + cvl_administrator_version_number.version_number + "\n",
                                 "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
@@ -834,14 +717,133 @@ class MyApp(wx.App):
         if os.path.exists(cvlAdministratorPreferencesFilePath):
             config.read(cvlAdministratorPreferencesFilePath)
 
-        global loginDialogFrame
-        loginDialogFrame = MyFrame(None, -1, 'CVL Administrator')
+        tempFrame = wx.Frame(None, -1)
+        tempFrame.Center()
 
+        #cvlAdministratorURL = "https://www.cvlAdministrator.org.au/index.php?option=com_content&view=article&id=121"
+
+        #try:
+            #myHtmlParser = MyHtmlParser()
+            #feed = urllib.urlopen(cvlAdministratorURL)
+            #html = feed.read()
+            #myHtmlParser.feed(html)
+            #myHtmlParser.close()
+        #except:
+            #dlg = wx.MessageDialog(tempFrame, "Error: Unable to contact MASSIVE website to check version number.\n\n" +
+                                        #"CVL Administrator cannot continue.\n",
+                                #"CVL Administrator", wx.OK | wx.ICON_INFORMATION)
+            #dlg.ShowModal()
+            #dlg.Destroy()
+            #sys.exit(1)
+
+
+        #latestVersion = myHtmlParser.data[0].strip()
+
+        dlg = wx.MessageDialog(tempFrame, "Warning: Bypassing version number check for now...\n", "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
+        latestVersion = "0.0.1"
+
+        if latestVersion!=cvl_administrator_version_number.version_number:
+            newVersionAlertDialog = wx.Dialog(tempFrame, title="CVL Administrator", name="CVL Administrator",pos=(200,150),size=(680,290))
+
+            if sys.platform.startswith("win"):
+                _icon = wx.Icon('CVL Administrator.ico', wx.BITMAP_TYPE_ICO)
+                newVersionAlertDialog.SetIcon(_icon)
+
+            if sys.platform.startswith("linux"):
+                import cvlAdministratorIcon
+                newVersionAlertDialog.SetIcon(cvlAdministratorIcon.getMASSIVElogoTransparent128x128Icon())
+
+            cvlAdministratorIconPanel = wx.Panel(newVersionAlertDialog)
+
+            import cvlAdministratorIcon
+            cvlAdministratorIconAsBitmap = cvlAdministratorIcon.getMASSIVElogoTransparent128x128Bitmap()
+            wx.StaticBitmap(cvlAdministratorIconPanel, -1, 
+                cvlAdministratorIconAsBitmap,
+                (0, 50),
+                (cvlAdministratorIconAsBitmap.GetWidth(), cvlAdministratorIconAsBitmap.GetHeight())) 
+
+            newVersionAlertTextPanel = wx.Panel(newVersionAlertDialog)
+
+            gs = wx.FlexGridSizer(rows=4, cols=1, vgap=5, hgap=5)
+            newVersionAlertTextPanel.SetSizer(gs)
+
+            newVersionAlertTitleLabel = wx.StaticText(newVersionAlertTextPanel,
+                label = "CVL Administrator")
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            font.SetPointSize(14)
+            font.SetWeight(wx.BOLD)
+            newVersionAlertTitleLabel.SetFont(font)
+            gs.Add(wx.StaticText(newVersionAlertTextPanel))
+            gs.Add(newVersionAlertTitleLabel, flag=wx.EXPAND)
+            gs.Add(wx.StaticText(newVersionAlertTextPanel))
+
+            newVersionAlertTextLabel1 = wx.StaticText(newVersionAlertTextPanel, 
+                label = 
+                "You are running version " + cvl_administrator_version_number.version_number + "\n\n" +
+                "The latest version is " + myHtmlParser.data[0] + "\n\n" +
+                "Please download a new version from:\n\n")
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            if sys.platform.startswith("darwin"):
+                font.SetPointSize(11)
+            else:
+                font.SetPointSize(9)
+            newVersionAlertTextLabel1.SetFont(font)
+            gs.Add(newVersionAlertTextLabel1, flag=wx.EXPAND)
+
+            newVersionAlertHyperlink = wx.HyperlinkCtrl(newVersionAlertTextPanel, 
+                id = wx.ID_ANY,
+                label = cvlAdministratorURL,
+                url = cvlAdministratorURL)
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            if sys.platform.startswith("darwin"):
+                font.SetPointSize(11)
+            else:
+                font.SetPointSize(8)
+            newVersionAlertHyperlink.SetFont(font)
+            gs.Add(newVersionAlertHyperlink, flag=wx.EXPAND)
+            gs.Add(wx.StaticText(newVersionAlertTextPanel))
+
+            newVersionAlertTextLabel2 = wx.StaticText(newVersionAlertTextPanel, 
+                label = 
+                "For queries, please contact:\n\nhelp@cvlAdministrator.org.au\njames.wettenhall@monash.edu\n")
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            if sys.platform.startswith("darwin"):
+                font.SetPointSize(11)
+            else:
+                font.SetPointSize(9)
+            newVersionAlertTextLabel2.SetFont(font)
+            gs.Add(newVersionAlertTextLabel2, flag=wx.EXPAND)
+
+            def OnOK(event):
+                sys.exit(1)
+
+            okButton = wx.Button(newVersionAlertTextPanel, 1, ' OK ')
+            okButton.SetDefault()
+            gs.Add(okButton, flag=wx.ALIGN_RIGHT)
+            gs.Add(wx.StaticText(newVersionAlertTextPanel))
+            gs.Fit(newVersionAlertTextPanel)
+
+            newVersionAlertDialog.Bind(wx.EVT_BUTTON, OnOK, id=1)
+
+            gs = wx.FlexGridSizer(rows=1, cols=3, vgap=5, hgap=5)
+            gs.Add(cvlAdministratorIconPanel, flag=wx.EXPAND)
+            gs.Add(newVersionAlertTextPanel, flag=wx.EXPAND)
+            gs.Add(wx.StaticText(newVersionAlertDialog,label="       "))
+            newVersionAlertDialog.SetSizer(gs)
+            gs.Fit(newVersionAlertDialog)
+
+            newVersionAlertDialog.ShowModal()
+            newVersionAlertDialog.Destroy()
+
+            sys.exit(1)
+ 
         global ec2CredentialsDialog
-        ec2CredentialsDialog = wx.Dialog(loginDialogFrame, title="CVL Administrator", name="CVL Administrator",size=(680,290))
+        ec2CredentialsDialog = wx.Dialog(tempFrame, title="CVL Administrator", name="CVL Administrator",size=(600,220))
         ec2CredentialsDialog.Center()
         ec2CredentialsPanel = wx.Panel(ec2CredentialsDialog)
-        gs = wx.FlexGridSizer(rows=4, cols=3, vgap=5, hgap=5)
+        gs = wx.FlexGridSizer(rows=8, cols=6, vgap=5, hgap=5)
         ec2CredentialsPanel.SetSizer(gs)
 
         ec2CredentialsPanelTitleLabel = wx.StaticText(ec2CredentialsPanel, label = "CVL Administrator")
@@ -849,18 +851,64 @@ class MyApp(wx.App):
         font.SetPointSize(14)
         font.SetWeight(wx.BOLD)
         ec2CredentialsPanelTitleLabel.SetFont(font)
-        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel))
-        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsPanelTitleLabel, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel))
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsPanelTitleLabel); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
 
         ec2CredentialsZipFileLabel = wx.StaticText(ec2CredentialsPanel, label = "EC2 credentials zip file:")
-        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel))
-        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsZipFileLabel, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel))
+
+        dummyPanel = wx.Panel(ec2CredentialsDialog)
+        defaultTextFieldSize = wx.TextCtrl(dummyPanel, -1, "").GetSize()
+        dummyPanel.Destroy()
+        ec2CredentialsZipFilenameField = wx.TextCtrl(ec2CredentialsPanel, -1, "", size=(200, defaultTextFieldSize.height))
+
+        def OnBrowse(self):
+            filters = 'EC2 Credentials files (*.zip)|*.zip'
+            openFileDialog = wx.FileDialog ( None, message = 'Open EC2 credentials zip file...', wildcard = filters, style = wx.OPEN)
+            if openFileDialog.ShowModal() == wx.ID_OK:
+                global ec2CredentialsZipFilePath
+                ec2CredentialsZipFilePath = openFileDialog.GetPath()
+                ec2CredentialsZipFilenameField.WriteText(ec2CredentialsZipFilePath)
+
+        browseButton = wx.Button(ec2CredentialsPanel, 1, "Browse...")
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnBrowse, id=1)
+
+        def OnHelp(self):
+            import displayEC2CredentialsImage
+
+        helpButton = wx.Button(ec2CredentialsPanel, 2, "Help...")
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnHelp, id=2)
+
+        def OnOK(self):
+            # ...
+            if ec2CredentialsZipFilePath.strip() != "":
+                ec2CredentialsDialog.Destroy()
+            else:
+                dlg = wx.MessageDialog(None, "Error: Please upload a zip file containing your NeCTAR EC2 credentials, e.g. \"810-x509.zip\".",
+                                "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
+                dlg.ShowModal()
+
+        okButton = wx.Button(ec2CredentialsPanel, 3, "OK")
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnOK, id=3)
+
+        def OnCancel(self):
+            sys.exit(1)
+
+        cancelButton = wx.Button(ec2CredentialsPanel, 4, "Cancel")
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnCancel, id=4)
+
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsZipFileLabel); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(ec2CredentialsZipFilenameField, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(browseButton, flag=wx.EXPAND);
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(helpButton, flag=wx.EXPAND);
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
+        gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(cancelButton, flag=wx.ALIGN_RIGHT); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(okButton, flag=wx.EXPAND);
 
         gs.Fit(ec2CredentialsPanel)
 
         ec2CredentialsDialog.ShowModal()
-        ec2CredentialsDialog.Destroy()
 
+        global loginDialogFrame
+        loginDialogFrame = MyFrame(None, -1, 'CVL Administrator')
         loginDialogFrame.Show(True)
         return True
 
