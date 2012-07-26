@@ -48,7 +48,7 @@ if dialog.ShowModal() == wx.ID_OK:
 
         import boto
         from boto.ec2.connection import EC2Connection
-        from boto.ec2.regioninfo import *
+        from boto.ec2.regioninfo import RegionInfo
 
         region = RegionInfo(name="NeCTAR", endpoint="nova.rc.nectar.org.au")
         connection = boto.connect_ec2(aws_access_key_id=ec2_access_key,

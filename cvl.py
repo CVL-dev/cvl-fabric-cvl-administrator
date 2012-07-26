@@ -1,7 +1,7 @@
-# cvlAdministrator.py
+# cvl.py
 """
-A wxPython GUI to provide easy login to the CVL Desktop, 
-initially on Mac OS X.  It can be run using "python cvlAdministrator.py",
+A wxPython GUI to provide an easy way to launch a CVL instance, 
+initially on Mac OS X.  It can be run using "python cvl.py",
 assuming that you have a 32-bit version of Python installed,
 wxPython, and the dependent Python modules imported below.
 
@@ -10,13 +10,6 @@ application bundle, which can be built as follows:
 
    python create_cvlAdministrator_bundle.py py2app
   
-ACKNOWLEDGEMENT
-
-Thanks to Michael Eager for a concise, non-GUI Python script
-which demonstrated the use of the Python pexpect module to 
-automate SSH logins and to automate calling TurboVNC 
-on Linux and on Mac OS X.
- 
 """
 
 # Later, STDERR will be redirected to logTextCtrl
@@ -43,21 +36,25 @@ import StringIO
 import xmlrpclib
 import appdirs
 import ConfigParser
+import boto
+from boto.ec2.connection import EC2Connection
+from boto.ec2.regioninfo import RegionInfo
 #import logging
 
 #logger = ssh.util.logging.getLogger()
 #logger.setLevel(logging.WARN)
 
-#defaultHost = "m2.cvlAdministrator.org.au"
-defaultHost = "m2-login2.cvlAdministrator.org.au"
-cvlAdministratorLoginHost = ""
-global resolution
-resolution = ""
-global cipher
-cipher = ""
-global username
-username = ""
-password = ""
+defaultImageName = ""
+global imageName
+imageName = ""
+defaultInstanceName = "CVL Instance 1"
+instanceName = defaultInstanceName
+global sshKeyPair
+sshKeyPair = ""
+global securityGroup
+securityGroup = "default"
+global contactEmail
+contactEmail = ""
 global sshTunnelProcess
 sshTunnelProcess = None
 global sshTunnelReady
@@ -65,11 +62,13 @@ sshTunnelReady = False
 global localPortNumber
 localPortNumber = "5901"
 global privateKeyFile
-global loginDialogFrame
-loginDialogFrame = None
+global launchDialogFrame
+launchDialogFrame = None
 
 global ec2CredentialsZipFilePath
 ec2CredentialsZipFilePath = ""
+global ec2Connection
+ec2Connection = None
 
 class MyHtmlParser(HTMLParser.HTMLParser):
   def __init__(self):
@@ -109,9 +108,9 @@ class MyFrame(wx.Frame):
         # wx.Frame(parent, style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
 
         if sys.platform.startswith("darwin"):
-            wx.Frame.__init__(self, parent, id, title, size=(350, 390), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
+            wx.Frame.__init__(self, parent, id, title, size=(400, 390), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
         else:
-            wx.Frame.__init__(self, parent, id, title, size=(350, 430), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
+            wx.Frame.__init__(self, parent, id, title, size=(400, 430), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
 
         if sys.platform.startswith("win"):
             _icon = wx.Icon('CVL Administrator.ico', wx.BITMAP_TYPE_ICO)
@@ -160,121 +159,150 @@ class MyFrame(wx.Frame):
         # so that we can easily insert the version number.
         # We may need to treat different OS's differently.
 
-        global loginDialogPanel
-        loginDialogPanel = wx.Panel(self)
+        global launchDialogPanel
+        launchDialogPanel = wx.Panel(self)
 
-        global cvlAdministratorHostLabel
-        cvlAdministratorHostLabel = wx.StaticText(loginDialogPanel, -1, 'CVL host', (10, 20))
-        global cvlAdministratorDisplayResolutionLabel
-        cvlAdministratorDisplayResolutionLabel = wx.StaticText(loginDialogPanel, -1, 'Resolution', (10, 140))
-        global sshTunnelCipherLabel
-        sshTunnelCipherLabel = wx.StaticText(loginDialogPanel, -1, 'SSH tunnel cipher', (10, 180))
-        global cvlAdministratorUsernameLabel
-        cvlAdministratorUsernameLabel = wx.StaticText(loginDialogPanel, -1, 'Username', (10, 220))
-        global cvlAdministratorPasswordLabel
-        cvlAdministratorPasswordLabel = wx.StaticText(loginDialogPanel, -1, 'Password', (10, 260))
+        global cvlImageNameLabel
+        cvlImageNameLabel = wx.StaticText(launchDialogPanel, -1, 'Image name', (10, 60))
+        global cvlInstanceNameLabel
+        cvlInstanceNameLabel = wx.StaticText(launchDialogPanel, -1, 'Instance name', (10, 100))
+        global cvlAdministratorSshKeyPairLabel
+        cvlAdministratorSshKeyPairLabel = wx.StaticText(launchDialogPanel, -1, 'SSH key pair', (10, 140))
+        global cvlAdministratorSecurityGroupLabel
+        cvlAdministratorSecurityGroupLabel = wx.StaticText(launchDialogPanel, -1, 'Security group', (10, 180))
+        global cvlAdministratorContactEmailLabel
+        cvlAdministratorContactEmailLabel = wx.StaticText(launchDialogPanel, -1, 'Contact email', (10, 220))
 
-        widgetWidth1 = 180
-        widgetWidth2 = 180
+        widgetWidth1 = 220
+        widgetWidth2 = 220
         if not sys.platform.startswith("win"):
             widgetWidth2 = widgetWidth2 + 25
 
-        cvlAdministratorHosts = ["m1-login1.cvlAdministrator.org.au", "m1-login2.cvlAdministrator.org.au",
-            "m2-login1.cvlAdministrator.org.au", "m2-login2.cvlAdministrator.org.au"]
-        global cvlAdministratorHostComboBox
-        cvlAdministratorHostComboBox = wx.ComboBox(loginDialogPanel, -1, value=defaultHost, pos=(125, 15), size=(widgetWidth2, -1),choices=cvlAdministratorHosts, style=wx.CB_DROPDOWN)
+        global defaultImageName
+        defaultImageName = "Centos 6.2 amd64"
 
-        global defaultResolution
-        displaySize = wx.DisplaySize()
-        desiredWidth = displaySize[0] * 0.99
-        desiredHeight = displaySize[1] * 0.85
-        defaultResolution = str(int(desiredWidth)) + "x" + str(int(desiredHeight))
-        resolution = defaultResolution
-        resolutions = [
-            defaultResolution, "1024x768", "1152x864", "1280x800", "1280x1024", "1360x768", "1366x768", "1440x900", "1600x900", "1680x1050", "1920x1080", "1920x1200", "7680x3200",
-            ]
-        global cvlAdministratorResolutionComboBox
-        cvlAdministratorResolutionComboBox = wx.ComboBox(loginDialogPanel, -1, value='', pos=(125, 135), size=(widgetWidth2, -1),choices=resolutions, style=wx.CB_DROPDOWN)
+        images = ec2Connection.get_all_images()
+        imageNames = []
+        for image in images:
+            imageNames.append(image.name)
+
+        global imageNameComboBox
+        imageNameComboBox = wx.ComboBox(launchDialogPanel, -1, value='', pos=(125, 55), size=(widgetWidth2, -1),choices=imageNames, style=wx.CB_DROPDOWN)
         if config.has_section("CVL Administrator Preferences"):
-            if config.has_option("CVL Administrator Preferences", "resolution"):
-                resolution = config.get("CVL Administrator Preferences", "resolution")
+            if config.has_option("CVL Administrator Preferences", "imageName"):
+                imageName = config.get("CVL Administrator Preferences", "imageName")
             else:
-                config.set("CVL Administrator Preferences","resolution","")
+                config.set("CVL Administrator Preferences","imageName","")
                 with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                     config.write(cvlAdministratorPreferencesFileObject)
         else:
             config.add_section("CVL Administrator Preferences")
             with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                 config.write(cvlAdministratorPreferencesFileObject)
-        if resolution.strip()!="":
-            cvlAdministratorResolutionComboBox.SetValue(resolution)
+        if imageName.strip()!="":
+            imageNameComboBox.SetValue(imageName)
         else:
-            cvlAdministratorResolutionComboBox.SetValue(defaultResolution)
+            imageNameComboBox.SetValue(defaultImageName)
 
-        cipher = ""
-        if sys.platform.startswith("win"):
-            defaultCipher = "arcfour"
-            ciphers = ["3des-cbc", "blowfish-cbc", "arcfour"]
+        global instanceNameTextField
+        if sys.platform.startswith("darwin"):
+            instanceNameTextField = wx.TextCtrl(launchDialogPanel, -1, value=defaultInstanceName, pos=(127, 95), size=(widgetWidth1, -1))
         else:
-            defaultCipher = "arcfour128"
-            ciphers = ["3des-cbc", "blowfish-cbc", "arcfour128"]
-        global sshTunnelCipherComboBox
-        sshTunnelCipherComboBox = wx.ComboBox(loginDialogPanel, -1, value='', pos=(125, 175), size=(widgetWidth2, -1),choices=ciphers, style=wx.CB_DROPDOWN)
+            instanceNameTextField = wx.TextCtrl(launchDialogPanel, -1, value=defaultInstanceName, pos=(125, 95), size=(widgetWidth1, -1))
+        if instanceName.strip()!="":
+            instanceNameTextField.SelectAll()
+        instanceNameTextField.SetFocus()
+
+        global defaultSshKeyPair
+        defaultSshKeyPair = ""
+
+        ssh_key_pairs = ec2Connection.get_all_key_pairs()
+        sshKeyPairs = []
+        for ssh_key_pair in ssh_key_pairs:
+            sshKeyPairs.append(ssh_key_pair.name)
+
+        if len(sshKeyPairs) > 0:
+            sshKeyPair = sshKeyPairs[0]
+
+        global sshKeyPairComboBox
+        sshKeyPairComboBox = wx.ComboBox(launchDialogPanel, -1, value='', pos=(125, 135), size=(widgetWidth2, -1),choices=sshKeyPairs, style=wx.CB_DROPDOWN)
         if config.has_section("CVL Administrator Preferences"):
-            if config.has_option("CVL Administrator Preferences", "cipher"):
-                cipher = config.get("CVL Administrator Preferences", "cipher")
+            if config.has_option("CVL Administrator Preferences", "sshKeyPair"):
+                sshKeyPair = config.get("CVL Administrator Preferences", "sshKeyPair")
             else:
-                config.set("CVL Administrator Preferences","cipher","")
+                config.set("CVL Administrator Preferences","sshKeyPair","")
                 with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                     config.write(cvlAdministratorPreferencesFileObject)
         else:
             config.add_section("CVL Administrator Preferences")
             with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                 config.write(cvlAdministratorPreferencesFileObject)
-        if cipher.strip()!="":
-            sshTunnelCipherComboBox.SetValue(cipher)
+        if sshKeyPair.strip()!="":
+            sshKeyPairComboBox.SetValue(sshKeyPair)
         else:
-            sshTunnelCipherComboBox.SetValue(defaultCipher)
+            sshKeyPairComboBox.SetValue(defaultSshKeyPair)
 
-        global username
+        defaultSecurityGroup = "default"
+        securityGroup = defaultSecurityGroup
+
+        security_groups = ec2Connection.get_all_security_groups()
+        securityGroups = []
+        for security_group in security_groups:
+            securityGroups.append(security_group.name)
+
+        global securityGroupComboBox
+        securityGroupComboBox = wx.ComboBox(launchDialogPanel, -1, value='', pos=(125, 175), size=(widgetWidth2, -1),choices=securityGroups, style=wx.CB_DROPDOWN)
         if config.has_section("CVL Administrator Preferences"):
-            if config.has_option("CVL Administrator Preferences", "username"):
-                username = config.get("CVL Administrator Preferences", "username")
+            if config.has_option("CVL Administrator Preferences", "securityGroup"):
+                securityGroup = config.get("CVL Administrator Preferences", "securityGroup")
             else:
-                config.set("CVL Administrator Preferences","username","")
+                config.set("CVL Administrator Preferences","securityGroup","")
                 with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                     config.write(cvlAdministratorPreferencesFileObject)
         else:
             config.add_section("CVL Administrator Preferences")
             with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
                 config.write(cvlAdministratorPreferencesFileObject)
-        global cvlAdministratorUsernameTextField
-        cvlAdministratorUsernameTextField = wx.TextCtrl(loginDialogPanel, -1, username,  (125, 215), (widgetWidth1, -1))
-        if username.strip()!="":
-            cvlAdministratorUsernameTextField.SelectAll()
+        if securityGroup.strip()!="":
+            securityGroupComboBox.SetValue(securityGroup)
+        else:
+            securityGroupComboBox.SetValue(defaultSecurityGroup)
 
-        global cvlAdministratorPasswordField
-        cvlAdministratorPasswordField = wx.TextCtrl(loginDialogPanel, -1, '',  (125, 255), (widgetWidth1, -1), style=wx.TE_PASSWORD)
+        global contactEmail
+        if config.has_section("CVL Administrator Preferences"):
+            if config.has_option("CVL Administrator Preferences", "contactEmail"):
+                contactEmail = config.get("CVL Administrator Preferences", "contactEmail")
+            else:
+                config.set("CVL Administrator Preferences","contactEmail","")
+                with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
+                    config.write(cvlAdministratorPreferencesFileObject)
+        else:
+            config.add_section("CVL Administrator Preferences")
+            with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
+                config.write(cvlAdministratorPreferencesFileObject)
+        global contactEmailTextField
+        if sys.platform.startswith("darwin"):
+            contactEmailTextField = wx.TextCtrl(launchDialogPanel, -1, contactEmail,  (127, 215), (widgetWidth1, -1))
+        else:
+            contactEmailTextField = wx.TextCtrl(launchDialogPanel, -1, contactEmail,  (125, 215), (widgetWidth1, -1))
 
-        cvlAdministratorUsernameTextField.SetFocus()
-
-        cvlAdministratorResolutionComboBox.MoveAfterInTabOrder(cvlAdministratorHostComboBox)
-        sshTunnelCipherComboBox.MoveAfterInTabOrder(cvlAdministratorResolutionComboBox)
-        cvlAdministratorUsernameTextField.MoveAfterInTabOrder(sshTunnelCipherComboBox)
-        cvlAdministratorPasswordField.MoveAfterInTabOrder(cvlAdministratorUsernameTextField)
+        instanceNameTextField.MoveAfterInTabOrder(imageNameComboBox)
+        sshKeyPairComboBox.MoveAfterInTabOrder(instanceNameTextField)
+        securityGroupComboBox.MoveAfterInTabOrder(sshKeyPairComboBox)
+        contactEmailTextField.MoveAfterInTabOrder(securityGroupComboBox)
 
         global cancelButton
-        cancelButton = wx.Button(loginDialogPanel, 1, 'Cancel', (130, 305))
+        cancelButton = wx.Button(launchDialogPanel, 1, 'Cancel', (130, 305))
         global loginButton
-        loginButton = wx.Button(loginDialogPanel, 2, 'Login', (230, 305))
+        loginButton = wx.Button(launchDialogPanel, 2, 'Launch', (230, 305))
         loginButton.SetDefault()
 
         self.Bind(wx.EVT_BUTTON, self.OnCancel, id=1)
-        self.Bind(wx.EVT_BUTTON, self.OnLogin, id=2)
+        self.Bind(wx.EVT_BUTTON, self.OnLaunch, id=2)
 
         self.statusbar = MyStatusBar(self)
-        global loginDialogStatusBar
-        loginDialogStatusBar = self.statusbar
+        global launchDialogStatusBar
+        launchDialogStatusBar = self.statusbar
         self.SetStatusBar(self.statusbar)
         self.Centre()
 
@@ -316,9 +344,9 @@ class MyFrame(wx.Frame):
         if textCtrl is not None:
             textCtrl.SelectAll()
 
-    def OnLogin(self, event):
-        class LoginThread(threading.Thread):
-            """Login Thread Class."""
+    def OnLaunch(self, event):
+        class LaunchThread(threading.Thread):
+            """Launch Thread Class."""
             def __init__(self, notify_window):
                 """Init Worker Thread Class."""
                 threading.Thread.__init__(self)
@@ -333,340 +361,58 @@ class MyFrame(wx.Frame):
                 # This is the time-consuming code executing in the new thread. 
 
                 waitCursor = wx.StockCursor(wx.CURSOR_WAIT)
-                loginDialogFrame.SetCursor(waitCursor)
-                loginDialogPanel.SetCursor(waitCursor)
-                cvlAdministratorHostLabel.SetCursor(waitCursor)
-                cvlAdministratorProjectLabel.SetCursor(waitCursor)
-                cvlAdministratorHoursLabel.SetCursor(waitCursor)
-                cvlAdministratorUsernameLabel.SetCursor(waitCursor)
-                cvlAdministratorPasswordLabel.SetCursor(waitCursor)
-                cvlAdministratorHostComboBox.SetCursor(waitCursor)
-                cvlAdministratorUsernameTextField.SetCursor(waitCursor)
-                cvlAdministratorPasswordField.SetCursor(waitCursor)
+                launchDialogFrame.SetCursor(waitCursor)
+                launchDialogPanel.SetCursor(waitCursor)
+                cvlInstanceNameLabel.SetCursor(waitCursor)
+                cvlAdministratorContactEmailLabel.SetCursor(waitCursor)
+                instanceNameTextField.SetCursor(waitCursor)
+                contactEmailTextField.SetCursor(waitCursor)
                 cancelButton.SetCursor(waitCursor)
                 loginButton.SetCursor(waitCursor)
 
                 global logTextCtrl
-                global loginDialogStatusBar
+                global launchDialogStatusBar
 
                 try:
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Logging in to " + cvlAdministratorLoginHost)
-                    wx.CallAfter(sys.stdout.write, "Attempting to log in to " + cvlAdministratorLoginHost + "...\n")
+                    wx.CallAfter(launchDialogStatusBar.SetStatusText, "Launching " + instanceName + "...")
+                    wx.CallAfter(sys.stdout.write, "Launching " + instanceName + "...\n")
                     
-                    sshClient = ssh.SSHClient()
-                    sshClient.set_missing_host_key_policy(ssh.AutoAddPolicy())
-                    sshClient.connect(cvlAdministratorLoginHost,username=username,password=password)
 
-                    wx.CallAfter(sys.stdout.write, "First login done.\n")
-
-                    wx.CallAfter(sys.stdout.write, "\n")
-
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Setting display resolution...")
-
-                    set_display_resolution_cmd = "/usr/local/desktop/set_display_resolution.sh " + resolution
-                    wx.CallAfter(sys.stdout.write, set_display_resolution_cmd + "\n")
-                    stdin,stdout,stderr = sshClient.exec_command(set_display_resolution_cmd)
-                    stderrRead = stderr.read()
-                    if len(stderrRead) > 0:
-                        wx.CallAfter(sys.stdout.write, stderrRead)
-                    
-                    wx.CallAfter(sys.stdout.write, "\n")
-
-                    visnode = "<visnode"
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Requesting remote desktop...")
-
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Acquired desktop node:" + visnode)
-
-                    wx.CallAfter(sys.stdout.write, "Massive Desktop visnode: " + visnode + "\n\n")
-
-                    wx.CallAfter(sys.stdout.write, "Generating SSH key-pair for tunnel...\n\n")
-
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Generating SSH key-pair for tunnel...")
-
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair*")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/usr/bin/ssh-keygen -C \"CVL Administrator\" -N \"\" -t rsa -f ~/CvlAdministratorKeyPair")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/touch ~/.ssh/authorized_keys")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/sed -i -e \"/CVL Administrator/d\" ~/.ssh/authorized_keys")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat CvlAdministratorKeyPair.pub >> ~/.ssh/authorized_keys")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair.pub")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/cat CvlAdministratorKeyPair")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-
-                    privateKeyString = stdout.read()
-
-                    stdin,stdout,stderr = sshClient.exec_command("/bin/rm -f ~/CvlAdministratorKeyPair")
-                    if len(stderr.read()) > 0:
-                        wx.CallAfter(sys.stdout.write, stderr.read())
-
-                    import tempfile
-                    privateKeyFile = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-                    privateKeyFile.write(privateKeyString)
-                    privateKeyFile.flush()
-                    privateKeyFile.close()
-
-                    def createTunnel():
-                        wx.CallAfter(sys.stdout.write, "Starting tunnelled SSH session...\n")
-
-                        try:
-                            if sys.platform.startswith("win"):
-                                sshBinary = "ssh.exe"
-                                chownBinary = "chown.exe"
-                                chmodBinary = "chmod.exe"
-                                if hasattr(sys, 'frozen'):
-                                    cvlAdministratorBinary = sys.executable
-                                    cvlAdministratorPath = os.path.dirname(cvlAdministratorBinary)
-                                    sshBinary = "\"" + os.path.join(cvlAdministratorPath, sshBinary) + "\""
-                                    chownBinary = "\"" + os.path.join(cvlAdministratorPath, chownBinary) + "\""
-                                    chmodBinary = "\"" + os.path.join(cvlAdministratorPath, chmodBinary) + "\""
-                                else:
-                                    sshBinary = "\"" + os.path.join(os.getcwd(), "sshwindows", sshBinary) + "\""
-                                    chownBinary = "\"" + os.path.join(os.getcwd(), "sshwindows", chownBinary) + "\""
-                                    chmodBinary = "\"" + os.path.join(os.getcwd(), "sshwindows", chmodBinary) + "\""
-                            elif sys.platform.startswith("darwin"):
-                                sshBinary = "/usr/bin/ssh"
-                                chownBinary = "/usr/sbin/chown"
-                                chmodBinary = "/bin/chmod"
-                            else:
-                                sshBinary = "/usr/bin/ssh"
-                                chownBinary = "/bin/chown"
-                                chmodBinary = "/bin/chmod"
-
-                            import getpass
-                            if sys.platform.startswith("win"):
-                                # On Windows Vista/7, the private key file,
-                                # will initially be created without any owner.
-                                # We must set the file's owner before we
-                                # can change the permissions to -rw------.
-                                chown_cmd = chownBinary + " \"" + getpass.getuser() + "\" " + privateKeyFile.name
-                                wx.CallAfter(sys.stdout.write, chown_cmd + "\n")
-                                subprocess.call(chown_cmd, shell=True)
-
-                            chmod_cmd = chmodBinary + " 600 " + privateKeyFile.name
-                            wx.CallAfter(sys.stdout.write, chmod_cmd + "\n")
-                            subprocess.call(chmod_cmd, shell=True)
-
-                            #if sys.platform.startswith("win"):
-                                #cipher = "arcfour"
-                            #else:
-                                #cipher = "arcfour128"
-                            proxyCommand = "-oProxyCommand=\"ssh -c " + cipher + " -i " + privateKeyFile.name +" "+username+"@"+cvlAdministratorLoginHost+" 'nc %h %p'\""
-                            # On Windows, try: DETACHED_PROCESS = 0x00000008
-                            # subprocess.Popen(... , creationflags=DETACHED_PROCESS , ...)
-
-                            wx.CallAfter(loginDialogStatusBar.SetStatusText, "Requesting ephemeral port...")
-
-                            global localPortNumber
-                            localPortNumber = "5901"
-                            # Request an ephemeral port from the operating system (by specifying port 0) :
-                            import socket
-                            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-                            sock.bind(('localhost', 0)) 
-                            localPortNumber = sock.getsockname()[1]
-                            sock.close()
-                            localPortNumber = str(localPortNumber)
-
-                            wx.CallAfter(loginDialogStatusBar.SetStatusText, "Creating secure tunnel...")
-
-                            #tunnel_cmd = sshBinary + " -i " + privateKeyFile.name + " -c " + cipher + " " \
-                                #"-oStrictHostKeyChecking=no " \
-                                #"-A " + proxyCommand + " " \
-                                #"-L " + localPortNumber + ":localhost:5901" + " -l " + username+" "+visnode+"-ib"
-
-                            tunnel_cmd = sshBinary + " -i " + privateKeyFile.name + " -c " + cipher + " " \
-                                "-t -t " \
-                                "-oStrictHostKeyChecking=no " \
-                                "-L " + localPortNumber + ":"+visnode+"-ib:5901" + " -l " + username+" "+cvlAdministratorLoginHost
-
-                            wx.CallAfter(sys.stdout.write, tunnel_cmd + "\n")
-                            global sshTunnelProcess
-                            sshTunnelProcess = subprocess.Popen(tunnel_cmd,
-                                universal_newlines=True,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
-
-                            global sshTunnelReady
-                            sshTunnelReady = False
-                            while True:
-                                time.sleep(1)
-                                line = sshTunnelProcess.stdout.readline()
-                                if "Welcome to MASSIVE" in line:
-                                    sshTunnelReady = True
-                                    break
-
-                        except KeyboardInterrupt:
-                            wx.CallAfter(sys.stdout.write, "C-c: Port forwarding stopped.")
-                            try:
-                                os.unlink(privateKeyFile.name)
-                            finally:
-                                os._exit(0)
-                        except:
-                            wx.CallAfter(sys.stdout.write, "CVL Administrator v" + cvl_administrator_version_number.version_number + "\n")
-                            wx.CallAfter(sys.stdout.write, traceback.format_exc())
-
-                    tunnelThread = threading.Thread(target=createTunnel)
-
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Creating secure tunnel...")
-
-                    tunnelThread.start()
-
-                    count = 1
-                    while not sshTunnelReady and count < 30:
-                        time.sleep(1)
-                        count = count + 1
-
-                    if count < 5:
-                        time.sleep (5-count)
-
-                    if sys.platform.startswith("win"):
-                        vnc = r"C:\Program Files\TurboVNC\vncviewer.exe"
-                    else:
-                        vnc = "/opt/TurboVNC/bin/vncviewer"
-                    if sys.platform.startswith("win"):
-                        key = None
-                        queryResult = None
-                        foundTurboVncInRegistry = False
-                        if not foundTurboVncInRegistry:
-                            try:
-                                key = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TurboVNC 64-bit_is1", 0,  _winreg.KEY_WOW64_64KEY | _winreg.KEY_ALL_ACCESS)
-                                queryResult = _winreg.QueryValueEx(key, "InstallLocation") 
-                                vnc = os.path.join(queryResult[0], "vncviewer.exe")
-                                foundTurboVncInRegistry = True
-                            except:
-                                foundTurboVncInRegistry = False
-                        if not foundTurboVncInRegistry:
-                            try:
-                                key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TurboVNC 64-bit_is1", 0,  _winreg.KEY_WOW64_64KEY | _winreg.KEY_ALL_ACCESS)
-                                queryResult = _winreg.QueryValueEx(key, "InstallLocation") 
-                                vnc = os.path.join(queryResult[0], "vncviewer.exe")
-                                foundTurboVncInRegistry = True
-                            except:
-                                foundTurboVncInRegistry = False
-                        if not foundTurboVncInRegistry:
-                            try:
-                                key = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TurboVNC_is1", 0, _winreg.KEY_ALL_ACCESS)
-                                queryResult = _winreg.QueryValueEx(key, "InstallLocation") 
-                                vnc = os.path.join(queryResult[0], "vncviewer.exe")
-                                foundTurboVncInRegistry = True
-                            except:
-                                foundTurboVncInRegistry = False
-                        if not foundTurboVncInRegistry:
-                            try:
-                                key = _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\TurboVNC_is1", 0, _winreg.KEY_ALL_ACCESS)
-                                queryResult = _winreg.QueryValueEx(key, "InstallLocation") 
-                                vnc = os.path.join(queryResult[0], "vncviewer.exe")
-                                foundTurboVncInRegistry = True
-                            except:
-                                foundTurboVncInRegistry = False
-
-                    wx.CallAfter(sys.stdout.write, "\n")
-
-                    if os.path.exists(vnc):
-                        wx.CallAfter(sys.stdout.write, "TurboVNC was found in " + vnc + "\n")
-                    else:
-                        wx.CallAfter(sys.stdout.write, "Error: TurboVNC was not found in " + vnc + "\n")
-
-                    wx.CallAfter(loginDialogStatusBar.SetStatusText, "Launching TurboVNC...")
-
-                    wx.CallAfter(sys.stdout.write, "\nStarting MASSIVE VNC...\n")
-
-                    try:
-                        if sys.platform.startswith("win"):
-                            proc = subprocess.Popen("\""+vnc+"\" /user "+username+" /autopass localhost:" + localPortNumber, 
-                                stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True,
-                                universal_newlines=True)
-                            proc.communicate(input=password)
-                            #proc.communicate()
-                        else:
-                            subprocess.call("echo \"" + password + "\" | " + vnc + " -user " + username + " -autopass localhost:" + localPortNumber,shell=True)
-                        try:
-                            global sshTunnelProcess
-                            sshTunnelProcess.terminate()
-                            os.unlink(privateKeyFile.name)
-                        finally:
-                            os._exit(0)
-
-                        arrowCursor = wx.StockCursor(wx.CURSOR_ARROW)
-                        loginDialogFrame.SetCursor(arrowCursor)
-                        loginDialogPanel.SetCursor(arrowCursor)
-                        cvlAdministratorHostLabel.SetCursor(arrowCursor)
-                        cvlAdministratorProjectLabel.SetCursor(arrowCursor)
-                        cvlAdministratorHoursLabel.SetCursor(arrowCursor)
-                        cvlAdministratorUsernameLabel.SetCursor(arrowCursor)
-                        cvlAdministratorPasswordLabel.SetCursor(arrowCursor)
-                        cvlAdministratorHostComboBox.SetCursor(arrowCursor)
-                        cvlAdministratorUsernameTextField.SetCursor(arrowCursor)
-                        cvlAdministratorPasswordField.SetCursor(arrowCursor)
-                        cancelButton.SetCursor(arrowCursor)
-                        loginButton.SetCursor(arrowCursor)
-
-                    except:
-                        wx.CallAfter(sys.stdout.write, "CVL Administrator v" + cvl_administrator_version_number.version_number + "\n")
-                        wx.CallAfter(sys.stdout.write, traceback.format_exc())
-
-                        arrowCursor = wx.StockCursor(wx.CURSOR_ARROW)
-                        loginDialogFrame.SetCursor(arrowCursor)
-                        loginDialogPanel.SetCursor(arrowCursor)
-                        cvlAdministratorHostLabel.SetCursor(arrowCursor)
-                        cvlAdministratorProjectLabel.SetCursor(arrowCursor)
-                        cvlAdministratorHoursLabel.SetCursor(arrowCursor)
-                        cvlAdministratorUsernameLabel.SetCursor(arrowCursor)
-                        cvlAdministratorPasswordLabel.SetCursor(arrowCursor)
-                        cvlAdministratorHostComboBox.SetCursor(arrowCursor)
-                        cvlAdministratorUsernameTextField.SetCursor(arrowCursor)
-                        cvlAdministratorPasswordField.SetCursor(arrowCursor)
-                        cancelButton.SetCursor(arrowCursor)
-                        loginButton.SetCursor(arrowCursor)
+                    # ...
 
                 except:
                     wx.CallAfter(sys.stdout.write, "CVL Administrator v" + cvl_administrator_version_number.version_number + "\n")
                     wx.CallAfter(sys.stdout.write, traceback.format_exc())
 
                     arrowCursor = wx.StockCursor(wx.CURSOR_ARROW)
-                    loginDialogFrame.SetCursor(arrowCursor)
-                    loginDialogPanel.SetCursor(arrowCursor)
-                    cvlAdministratorHostLabel.SetCursor(arrowCursor)
-                    cvlAdministratorProjectLabel.SetCursor(arrowCursor)
-                    cvlAdministratorHoursLabel.SetCursor(arrowCursor)
-                    cvlAdministratorUsernameLabel.SetCursor(arrowCursor)
-                    cvlAdministratorPasswordLabel.SetCursor(arrowCursor)
-                    cvlAdministratorHostComboBox.SetCursor(arrowCursor)
-                    cvlAdministratorUsernameTextField.SetCursor(arrowCursor)
-                    cvlAdministratorPasswordField.SetCursor(arrowCursor)
+                    launchDialogFrame.SetCursor(arrowCursor)
+                    launchDialogPanel.SetCursor(arrowCursor)
+                    cvlInstanceNameLabel.SetCursor(arrowCursor)
+                    cvlAdministratorContactEmailLabel.SetCursor(arrowCursor)
+                    instanceNameTextField.SetCursor(arrowCursor)
+                    contactEmailTextField.SetCursor(arrowCursor)
                     cancelButton.SetCursor(arrowCursor)
                     loginButton.SetCursor(arrowCursor)
-
-                # Example of using wx.PostEvent to post an event from a thread:
-                #wx.PostEvent(self._notify_window, ResultEvent(10))
 
             def abort(self):
                 """abort worker thread."""
                 # Method for use by main thread to signal an abort
                 self._want_abort = 1
 
-        username = cvlAdministratorUsernameTextField.GetValue()
-        password = cvlAdministratorPasswordField.GetValue()
-        cvlAdministratorLoginHost = cvlAdministratorHostComboBox.GetValue()
-        resolution = cvlAdministratorResolutionComboBox.GetValue()
-        cipher = sshTunnelCipherComboBox.GetValue()
+        imageName = imageNameComboBox.GetValue()
+        instanceName = instanceNameTextField.GetValue()
+        sshKeyPair = sshKeyPairComboBox.GetValue()
+        securityGroup = securityGroupComboBox.GetValue()
+        contactEmail = contactEmailTextField.GetValue()
 
-        config.set("CVL Administrator Preferences","username",username)
-        config.set("CVL Administrator Preferences","resolution",resolution)
-        config.set("CVL Administrator Preferences","cipher",cipher)
+        config.set("CVL Administrator Preferences","imageName",imageName)
+        config.set("CVL Administrator Preferences","sshKeyPair",sshKeyPair)
+        config.set("CVL Administrator Preferences","securityGroup",securityGroup)
+        config.set("CVL Administrator Preferences","contactEmail",contactEmail)
         with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
             config.write(cvlAdministratorPreferencesFileObject)
 
-        logWindow = wx.Frame(self, title="CVL Login", name="CVL Login",pos=(200,150),size=(700,450))
+        logWindow = wx.Frame(self, title="Launching a Characterisation Virtual Laboratory Instance", name="CVL Launch Instance",pos=(200,150),size=(700,450))
 
         if sys.platform.startswith("win"):
             _icon = wx.Icon('CVL Administrator.ico', wx.BITMAP_TYPE_ICO)
@@ -689,9 +435,8 @@ class MyFrame(wx.Frame):
 
         sys.stdout = logTextCtrl
         sys.stderr = logTextCtrl
-        #print "Redirected STDOUT and STDERR to logTextCtrl"
 
-        LoginThread(self)
+        LaunchThread(self)
 
 class MyStatusBar(wx.StatusBar):
     def __init__(self, parent):
@@ -873,15 +618,68 @@ class MyApp(wx.App):
         ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnBrowse, id=1)
 
         def OnHelp(self):
-            import displayEC2CredentialsImage
+            import cStringIO
+            import downloadingEC2CredentialsImage
+
+            global bmp
+
+            class DisplayDownloadingEC2CredentialsImage(wx.Panel):
+                def __init__(self, parent, id):
+                    wx.Panel.__init__(self, parent, id)
+                    bmp = downloadingEC2CredentialsImage.getDownloadingEC2CredentialsBitmap()
+                    wx.StaticBitmap(self, -1, bmp, (0, 0), (bmp.GetWidth(), bmp.GetHeight()))
+
+            bmp = downloadingEC2CredentialsImage.getDownloadingEC2CredentialsBitmap()
+            ec2ImageFrame = wx.Frame(None, -1, "CVL Administrator - How To Download EC2 Credentials From Nectar", size = (bmp.GetWidth(), bmp.GetHeight()))
+            DisplayDownloadingEC2CredentialsImage(ec2ImageFrame,-1)
+            ec2ImageFrame.Show(1)
 
         helpButton = wx.Button(ec2CredentialsPanel, 2, "Help...")
         ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnHelp, id=2)
 
         def OnOK(self):
-            # ...
             if ec2CredentialsZipFilePath.strip() != "":
-                ec2CredentialsDialog.Destroy()
+
+                import zipfile
+                zf = zipfile.ZipFile(ec2CredentialsZipFilePath)
+                ec2rcFilename = 'ec2rc.sh'
+                try:
+                    info = zf.getinfo(ec2rcFilename)
+                except KeyError:
+                    print 'ERROR: Did not find %s in zip file' % ec2rcFilename
+                else:
+                    #print '%s is %d bytes' % (info.filename, info.file_size)
+                    ec2rcContents = zf.read(ec2rcFilename)
+                    stringBuffer = StringIO.StringIO(ec2rcContents)
+
+                    line = "\n"
+                    ec2_access_key = ""
+                    ec2_secret_key = ""
+                    while line!="":
+                        line = stringBuffer.readline()
+                        if "export EC2_ACCESS_KEY" in line:
+                            lineSplit = line.split("=")
+                            ec2_access_key = lineSplit[1].strip()
+                            #print "EC2_ACCESS_KEY = " + ec2_access_key
+                        if "export EC2_SECRET_KEY" in line:
+                            lineSplit = line.split("=")
+                            ec2_secret_key = lineSplit[1].strip()
+                            #print "EC2_SECRET_KEY = " + ec2_secret_key
+
+                    import boto
+                    from boto.ec2.connection import EC2Connection
+                    from boto.ec2.regioninfo import RegionInfo
+
+                    region = RegionInfo(name="NeCTAR", endpoint="nova.rc.nectar.org.au")
+                    global ec2Connection
+                    ec2Connection = boto.connect_ec2(aws_access_key_id=ec2_access_key,
+                        aws_secret_access_key=ec2_secret_key,
+                        is_secure=False,
+                        region=region,
+                        port=8773,
+                        path="/services/Cloud")
+
+                    ec2CredentialsDialog.Destroy()
             else:
                 dlg = wx.MessageDialog(None, "Error: Please upload a zip file containing your NeCTAR EC2 credentials, e.g. \"810-x509.zip\".",
                                 "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
@@ -907,9 +705,9 @@ class MyApp(wx.App):
 
         ec2CredentialsDialog.ShowModal()
 
-        global loginDialogFrame
-        loginDialogFrame = MyFrame(None, -1, 'CVL Administrator')
-        loginDialogFrame.Show(True)
+        global launchDialogFrame
+        launchDialogFrame = MyFrame(None, -1, 'CVL Administrator')
+        launchDialogFrame.Show(True)
         return True
 
 app = MyApp(False) # Don't automatically redirect sys.stdout and sys.stderr to a Window.
