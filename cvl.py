@@ -375,10 +375,48 @@ class MyFrame(wx.Frame):
 
                 try:
                     wx.CallAfter(launchDialogStatusBar.SetStatusText, "Launching " + instanceName + "...")
-                    wx.CallAfter(sys.stdout.write, "Launching " + instanceName + "...\n")
+                    wx.CallAfter(sys.stdout.write, "Launching " + instanceName + "...\n\n")
                     
 
-                    # ...
+                    images = ec2Connection.get_all_images()
+                    image_id = "?"
+                    for image in images:
+                        if image.name == imageName:
+                            image_id = image.id
+ 
+                    reservation = ec2Connection.run_instances(image_id,key_name=sshKeyPair,security_groups=[securityGroup],user_data="Contact email: " + contactEmail + "\n")
+                    wx.CallAfter(sys.stdout.write, "reservation = ec2Connection.run_instances(\""+image_id+"\",key_name=\""+sshKeyPair+"\",security_groups=[\""+securityGroup+"\"])\n")
+                    time.sleep(5)
+                    wx.CallAfter(sys.stdout.write, "instance = reservation.instances[0]\n")
+                    instance = reservation.instances[0]
+
+                    #wx.CallAfter(sys.stdout.write, "\ninstance.add_tag(\"Name\",\"({" + instanceName +"})\")\n")
+                    #instance.add_tag("Name", "({" + instanceName + "})")
+
+                    #instance.add_tag(({"Name": instanceName}))
+                    #ec2Connection.create_tags([instance.id], {"Name" : instanceName})
+
+                    #wx.CallAfter(sys.stdout.write, "ec2Connection.create_tags([instance.id], {\"Name\": instanceName})\n")
+                    #ec2Connection.create_tags([instance.id], {"tag:Name": instanceName})
+
+                    #wx.CallAfter(sys.stdout.write, "\ninstance.add_tag(\"Contact Email\", \"({" + contactEmail + "})\")\n")
+                    #instance.add_tag("Contact Email", "({" + contactEmail+ "})")
+
+                    while instance.state != "running":
+                        wx.CallAfter(sys.stdout.write, "instance.state = " + instance.state + "...\n")
+                        time.sleep(10)
+                        instance.update()
+                    wx.CallAfter(sys.stdout.write, "instance.state = " + instance.state + "...\n")
+
+                    wx.CallAfter(sys.stdout.write, "\ninstance.ip_address = " + instance.ip_address + "...\n\n")
+                   
+                    #instance.add_tag("Name", instanceName)
+
+                    wx.CallAfter(sys.stdout.write, "import pprint\n")
+                    import pprint
+                    wx.CallAfter(sys.stdout.write, "instanceProperties = pprint.pprint(instance.__dict__)\n")
+                    instanceProperties = pprint.pformat(instance.__dict__) 
+                    wx.CallAfter(sys.stdout.write, instanceProperties + "\n")
 
                 except:
                     wx.CallAfter(sys.stdout.write, "CVL Administrator v" + cvl_administrator_version_number.version_number + "\n")
@@ -412,7 +450,7 @@ class MyFrame(wx.Frame):
         with open(cvlAdministratorPreferencesFilePath, 'wb') as cvlAdministratorPreferencesFileObject:
             config.write(cvlAdministratorPreferencesFileObject)
 
-        logWindow = wx.Frame(self, title="Launching a Characterisation Virtual Laboratory Instance", name="CVL Launch Instance",pos=(200,150),size=(700,450))
+        logWindow = wx.Frame(self, title="Launching a Characterisation Virtual Laboratory Instance", name="CVL Launch Instance",pos=(200,150),size=(800,500))
 
         if sys.platform.startswith("win"):
             _icon = wx.Icon('CVL Administrator.ico', wx.BITMAP_TYPE_ICO)
@@ -677,7 +715,7 @@ class MyApp(wx.App):
                         is_secure=False,
                         region=region,
                         port=8773,
-                        path="/services/Cloud")
+                        path="/services/Cloud",debug=1)
 
                     ec2CredentialsDialog.Destroy()
             else:
