@@ -125,7 +125,7 @@ class MyFrame(wx.Frame):
         if sys.platform.startswith("win") or sys.platform.startswith("linux"):
             self.file_menu = wx.Menu()
             self.file_menu.Append(wx.ID_EXIT, "E&xit\tAlt-X", "Close window and exit program.")
-            self.Bind(wx.EVT_MENU, self.OnExit, id=wx.ID_EXIT)
+            self.Bind(wx.EVT_MENU, self.onExit, id=wx.ID_EXIT)
             self.menu_bar.Append(self.file_menu, "&File")
 
         if sys.platform.startswith("darwin"):
@@ -137,18 +137,18 @@ class MyFrame(wx.Frame):
             # find the window/dialog which contains the menu.
             self.edit_menu = wx.Menu()
             self.edit_menu.Append(wx.ID_CUT, "Cut", "Cut the selected text")
-            self.Bind(wx.EVT_MENU, self.OnCut, id=wx.ID_CUT)
+            self.Bind(wx.EVT_MENU, self.onCut, id=wx.ID_CUT)
             self.edit_menu.Append(wx.ID_COPY, "Copy", "Copy the selected text")
-            self.Bind(wx.EVT_MENU, self.OnCopy, id=wx.ID_COPY)
+            self.Bind(wx.EVT_MENU, self.onCopy, id=wx.ID_COPY)
             self.edit_menu.Append(wx.ID_PASTE, "Paste", "Paste text from the clipboard")
-            self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
+            self.Bind(wx.EVT_MENU, self.onPaste, id=wx.ID_PASTE)
             self.edit_menu.Append(wx.ID_SELECTALL, "Select All")
-            self.Bind(wx.EVT_MENU, self.OnSelectAll, id=wx.ID_SELECTALL)
+            self.Bind(wx.EVT_MENU, self.onSelectAll, id=wx.ID_SELECTALL)
             self.menu_bar.Append(self.edit_menu, "&Edit")
 
         self.help_menu = wx.Menu()
         self.help_menu.Append(wx.ID_ABOUT,   "&About CVL Administrator")
-        self.Bind(wx.EVT_MENU, self.OnAbout, id=wx.ID_ABOUT)
+        self.Bind(wx.EVT_MENU, self.onAbout, id=wx.ID_ABOUT)
         self.menu_bar.Append(self.help_menu, "&Help")
 
         self.SetTitle("CVL Administrator")
@@ -179,7 +179,8 @@ class MyFrame(wx.Frame):
             widgetWidth2 = widgetWidth2 + 25
 
         global defaultImageName
-        defaultImageName = "Centos 6.2 amd64"
+        #defaultImageName = "Centos 6.2 amd64"
+        defaultImageName = "CvlDemoSnapshot27071"
 
         images = ec2Connection.get_all_images()
         imageNames = []
@@ -187,6 +188,7 @@ class MyFrame(wx.Frame):
             imageNames.append(image.name)
 
         global imageNameComboBox
+        global imageName
         imageNameComboBox = wx.ComboBox(launchDialogPanel, -1, value='', pos=(125, 55), size=(widgetWidth2, -1),choices=imageNames, style=wx.CB_DROPDOWN)
         if config.has_section("CVL Administrator Preferences"):
             if config.has_option("CVL Administrator Preferences", "imageName"):
@@ -297,8 +299,8 @@ class MyFrame(wx.Frame):
         loginButton = wx.Button(launchDialogPanel, 2, 'Launch', (230, 305))
         loginButton.SetDefault()
 
-        self.Bind(wx.EVT_BUTTON, self.OnCancel, id=1)
-        self.Bind(wx.EVT_BUTTON, self.OnLaunch, id=2)
+        self.Bind(wx.EVT_BUTTON, self.onCancel, id=1)
+        self.Bind(wx.EVT_BUTTON, self.onLaunch, id=2)
 
         self.statusbar = MyStatusBar(self)
         global launchDialogStatusBar
@@ -306,45 +308,45 @@ class MyFrame(wx.Frame):
         self.SetStatusBar(self.statusbar)
         self.Centre()
 
-    def OnAbout(self, event):
+    def onAbout(self, event):
         dlg = wx.MessageDialog(self, "Version " + cvl_administrator_version_number.version_number + "\n",
                                 "CVL Administrator", wx.OK | wx.ICON_INFORMATION)
         dlg.ShowModal()
         dlg.Destroy()
 
-    def OnExit(self, event):
+    def onExit(self, event):
         try:
             os.unlink(privateKeyFile.name)
         finally:
             os._exit(0)
 
-    def OnCancel(self, event):
+    def onCancel(self, event):
         try:
             os.unlink(privateKeyFile.name)
         finally:
             os._exit(0)
 
-    def OnCut(self, event):
+    def onCut(self, event):
         textCtrl = self.FindFocus()
         if textCtrl is not None:
             textCtrl.Cut()
 
-    def OnCopy(self, event):
+    def onCopy(self, event):
         textCtrl = self.FindFocus()
         if textCtrl is not None:
             textCtrl.Copy()
 
-    def OnPaste(self, event):
+    def onPaste(self, event):
         textCtrl = self.FindFocus()
         if textCtrl is not None:
             textCtrl.Paste()
 
-    def OnSelectAll(self, event):
+    def onSelectAll(self, event):
         textCtrl = self.FindFocus()
         if textCtrl is not None:
             textCtrl.SelectAll()
 
-    def OnLaunch(self, event):
+    def onLaunch(self, event):
         class LaunchThread(threading.Thread):
             """Launch Thread Class."""
             def __init__(self, notify_window):
@@ -599,7 +601,7 @@ class MyApp(wx.App):
             newVersionAlertTextLabel2.SetFont(font)
             gs.Add(newVersionAlertTextLabel2, flag=wx.EXPAND)
 
-            def OnOK(event):
+            def onOK(event):
                 sys.exit(1)
 
             okButton = wx.Button(newVersionAlertTextPanel, 1, ' OK ')
@@ -608,7 +610,7 @@ class MyApp(wx.App):
             gs.Add(wx.StaticText(newVersionAlertTextPanel))
             gs.Fit(newVersionAlertTextPanel)
 
-            newVersionAlertDialog.Bind(wx.EVT_BUTTON, OnOK, id=1)
+            newVersionAlertDialog.Bind(wx.EVT_BUTTON, onOK, id=1)
 
             gs = wx.FlexGridSizer(rows=1, cols=3, vgap=5, hgap=5)
             gs.Add(cvlAdministratorIconPanel, flag=wx.EXPAND)
@@ -644,7 +646,7 @@ class MyApp(wx.App):
         dummyPanel.Destroy()
         ec2CredentialsZipFilenameField = wx.TextCtrl(ec2CredentialsPanel, -1, "", size=(200, defaultTextFieldSize.height))
 
-        def OnBrowse(self):
+        def onBrowse(self):
             filters = 'EC2 Credentials files (*.zip)|*.zip'
             openFileDialog = wx.FileDialog ( None, message = 'Open EC2 credentials zip file...', wildcard = filters, style = wx.OPEN)
             if openFileDialog.ShowModal() == wx.ID_OK:
@@ -653,9 +655,9 @@ class MyApp(wx.App):
                 ec2CredentialsZipFilenameField.WriteText(ec2CredentialsZipFilePath)
 
         browseButton = wx.Button(ec2CredentialsPanel, 1, "Browse...")
-        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnBrowse, id=1)
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, onBrowse, id=1)
 
-        def OnHelp(self):
+        def onHelp(self):
             import cStringIO
             import downloadingEC2CredentialsImage
 
@@ -673,9 +675,9 @@ class MyApp(wx.App):
             ec2ImageFrame.Show(1)
 
         helpButton = wx.Button(ec2CredentialsPanel, 2, "Help...")
-        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnHelp, id=2)
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, onHelp, id=2)
 
-        def OnOK(self):
+        def onOK(self):
             if ec2CredentialsZipFilePath.strip() != "":
 
                 import zipfile
@@ -724,13 +726,13 @@ class MyApp(wx.App):
                 dlg.ShowModal()
 
         okButton = wx.Button(ec2CredentialsPanel, 3, "OK")
-        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnOK, id=3)
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, onOK, id=3)
 
-        def OnCancel(self):
+        def onCancel(self):
             sys.exit(1)
 
         cancelButton = wx.Button(ec2CredentialsPanel, 4, "Cancel")
-        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, OnCancel, id=4)
+        ec2CredentialsDialog.Bind(wx.EVT_BUTTON, onCancel, id=4)
 
         gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(wx.StaticText(ec2CredentialsPanel));
         gs.Add(wx.StaticText(ec2CredentialsPanel, -1, "               ")); gs.Add(ec2CredentialsZipFileLabel); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(ec2CredentialsZipFilenameField, flag=wx.EXPAND); gs.Add(wx.StaticText(ec2CredentialsPanel)); gs.Add(browseButton, flag=wx.EXPAND);
