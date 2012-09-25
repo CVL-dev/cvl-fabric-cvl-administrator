@@ -1,14 +1,14 @@
-DEPENDENCIES FOR MASSIVE LAUNCHER
+DEPENDENCIES FOR CVL ADMINISTRATOR
 
 1. OVERVIEW
 2. RECOMMENDED PYTHON VERSION
-3. PYTHON MODULES REQUIRED TO RUN MASSIVE LAUNCHER
+3. PYTHON MODULES REQUIRED TO RUN CVL ADMINISTRATOR
 4. PYTHON MODULES REQUIRED TO BUILD THE BUNDLED DISTRIBUTABLE APPLICATION
 
 1. OVERVIEW
 
-The MASSIVE Launcher is a wxPython application which can be run by typing
-"python massive.py" at the command prompt.  It can be built into a Mac OS X
+The CVL Administrator is a wxPython application which can be run by typing
+"python cvlAdministrator.py" at the command prompt.  It can be built into a Mac OS X
 application bundle using py2app, and it can be built into a Windows 
 application bundle using py2exe.  Bundling the application in this way
 requires additional Python modules - see Section 4.
@@ -26,7 +26,7 @@ Mac OS X: http://www.python.org/ftp/python/2.7.3/python-2.7.3-macosx10.3.dmg
 
 Windows: http://www.python.org/ftp/python/2.7.3/python-2.7.3.msi
 
-3. PYTHON MODULES REQUIRED TO RUN MASSIVE LAUNCHER
+3. PYTHON MODULES REQUIRED TO RUN CVL ADMINISTRATOR
 
 3.1 wx
 3.2 setuptools
